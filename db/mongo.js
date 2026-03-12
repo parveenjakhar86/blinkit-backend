@@ -17,11 +17,46 @@ let db;
 const getMongoUri = () => String(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017').trim();
 const getDatabaseName = () => String(process.env.MONGO_DB_NAME || 'blinkit').trim();
 
+const toBool = value => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+
+const getMongoClientOptions = uri => {
+  const options = {
+    serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 15000),
+    connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 15000)
+  };
+
+  // Atlas endpoints always require TLS. Keep it explicit for hosted environments.
+  if (/mongodb\.net/i.test(uri)) {
+    options.tls = true;
+  }
+
+  if (toBool(process.env.MONGO_TLS_ALLOW_INVALID_CERTS)) {
+    options.tlsAllowInvalidCertificates = true;
+  }
+
+  if (toBool(process.env.MONGO_TLS_ALLOW_INVALID_HOSTNAMES)) {
+    options.tlsAllowInvalidHostnames = true;
+  }
+
+  return options;
+};
+
 const initMongo = async () => {
   if (db) return db;
 
-  client = new MongoClient(getMongoUri());
-  await client.connect();
+  const uri = getMongoUri();
+
+  try {
+    client = new MongoClient(uri, getMongoClientOptions(uri));
+    await client.connect();
+  } catch (error) {
+    const details = String(error?.message || error || 'MongoDB connection failed');
+    const atlasHint = /mongodb\.net/i.test(uri)
+      ? ' Atlas hint: set Render MONGO_URI to the Atlas Driver URI format (mongodb+srv://...), and in Atlas Network Access allow 0.0.0.0/0 for Render.'
+      : '';
+    throw new Error(`${details}.${atlasHint}`.trim());
+  }
+
   db = client.db(getDatabaseName());
 
   await Promise.all([
