@@ -2,7 +2,6 @@ services:
   - type: web
     name: blinkit-backend
     runtime: node
-    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     plan: free
