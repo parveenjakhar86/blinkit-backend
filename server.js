@@ -6,6 +6,14 @@ const { initMongo, getCollection } = require('./db/mongo');
 
 require('dotenv').config();
 
+process.on('unhandledRejection', error => {
+  console.error('Unhandled promise rejection:', error);
+});
+
+process.on('uncaughtException', error => {
+  console.error('Uncaught exception:', error);
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -59,14 +67,16 @@ const startServer = async () => {
   try {
     await initMongo();
     console.log('MongoDB connected');
-  } catch (dbError) {
-    console.error('MongoDB connection failed.');
-    console.error(dbError);
+    await ensureDefaultAdminUser();
+    app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
+  } catch (startupError) {
+    console.error('Application startup failed.');
+    console.error(startupError?.stack || startupError);
     process.exit(1);
   }
-
-  await ensureDefaultAdminUser();
-  app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
 };
 
-startServer();
+startServer().catch(error => {
+  console.error('Fatal startup error:', error?.stack || error);
+  process.exit(1);
+});
